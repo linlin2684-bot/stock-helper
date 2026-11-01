@@ -29,6 +29,7 @@
     --up:#ff5a5a; --down:#3ccf6e; --up-soft:#3a1a1c; --down-soft:#15301f;
     --shadow:none;
   }
+  .btn:not(.ghost):not(.red):not(.green),.mic{color:#0b1020}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:calc(16px * var(--fs))}
@@ -125,6 +126,8 @@ table.kv tr.sec td{color:var(--sub);font-size:.8rem;border-bottom:0;padding-top:
 .sugg div{padding:.55rem .7rem;border-bottom:1px solid var(--line);cursor:pointer}
 .sugg div:last-child{border-bottom:0}
 .hidden{display:none!important}
+.cin{width:4.8rem;border:1px solid var(--line);border-radius:8px;padding:.3rem .45rem;background:var(--bg);color:var(--text);font-size:1rem;-webkit-appearance:none;appearance:none}
+select.cin{width:4.2rem;background-image:linear-gradient(45deg,transparent 50%,var(--sub) 50%),linear-gradient(135deg,var(--sub) 50%,transparent 50%);background-position:calc(100% - 12px) 55%,calc(100% - 7px) 55%;background-size:5px 5px;background-repeat:no-repeat}
 .disclaimer{font-size:.78rem;color:var(--sub);text-align:center;margin:1rem 0}
 </style>
 </head>
@@ -865,7 +868,7 @@ const CONDS = [
   { k: 'tb', cat: '籌碼', L: ['投信連續買超', '天以上'], p: [3, 3], tw: 1, test: (r, n) => r.tb >= n },
   { k: 'y', cat: '基本面', L: ['殖利率超過', '%'], p: [5, 4], tw: 1, test: (r, x) => r.y >= x },
   { k: 'pe', cat: '基本面', L: ['本益比低於', '倍'], p: [15, 20], tw: 1, test: (r, x) => r.pe > 0 && r.pe <= x },
-  { k: 'eps', cat: '基本面', L: '最近一季有賺錢（EPS 大於 0）', tw: 1, test: r => r.eps > 0 },
+  { k: 'eps', cat: '基本面', L: '有賺錢（近四季 EPS 大於 0）', tw: 1, test: r => r.eps > 0 },
   { k: 'yoy', cat: '基本面', L: ['月營收比去年同月成長超過', '%'], p: [10, 10], tw: 1, test: (r, x) => r.yoy >= x },
   { k: 'dy', cat: '基本面', L: ['連續配息', '年以上（最多 5 年）'], p: [3, 3], test: (r, n) => r.dy >= n },
   { k: 'liq', cat: '排除', L: ['排除成交量太小（平均每天少於', ''], p: [500, 50], unit: ['張）', '萬股）'], bt: 1, test: (r, n) => r.av >= n },
@@ -969,12 +972,13 @@ function editConds(cur, mkt, done){
     ${cats.map(cat => { const cs = CONDS.filter(c => c.cat === cat && condOK(c, mkt)); if (!cs.length) return '';
       return `<div style="margin-top:.9rem"><b>${cat}</b>${cs.map(c => {
         const on = cur[c.k] != null, v = on ? cur[c.k] : condDefault(c, mkt);
-        let lab = esc(c.L);
-        if (Array.isArray(c.L)) lab = `${esc(c.L[0])} ${c.opts ? `<select data-v="${c.k}">${c.opts.map(o => `<option ${+v === o ? 'selected' : ''}>${o}</option>`).join('')}</select>` : `<input data-v="${c.k}" type="number" inputmode="decimal" step="any" value="${v}" style="width:4.5rem;border:1px solid var(--line);border-radius:8px;padding:.2rem .4rem;background:var(--bg)">`} ${esc(c.unit ? c.unit[mkt === 'us' ? 1 : 0] : c.L[1])}`;
-        return `<label class="row" style="padding:.55rem 0;border-bottom:1px solid var(--line);align-items:center"><input type="checkbox" data-c="${c.k}" ${on ? 'checked' : ''} style="width:1.3rem;height:1.3rem;flex-shrink:0"><span>${lab}${c.bt ? '' : ' <span class="tag">無法回測</span>'}</span></label>`;
+        const id = 'cb-' + c.k, lb = t => `<label for="${id}">${esc(t)}</label>`;
+        let lab = lb(c.L);
+        if (Array.isArray(c.L)) lab = `${lb(c.L[0])} ${c.opts ? `<select class="cin" data-v="${c.k}">${c.opts.map(o => `<option value="${o}" ${+v === o ? 'selected' : ''}>${o}</option>`).join('')}</select>` : `<input class="cin" data-v="${c.k}" type="number" inputmode="decimal" step="any" value="${v}">`} ${lb(c.unit ? c.unit[mkt === 'us' ? 1 : 0] : c.L[1])}`;
+        return `<div class="row" style="padding:.55rem 0;border-bottom:1px solid var(--line);align-items:center"><input type="checkbox" id="${id}" data-c="${c.k}" ${on ? 'checked' : ''} style="width:1.3rem;height:1.3rem;flex-shrink:0"><span>${lab}${c.bt ? '' : ' <span class="tag">無法回測</span>'}</span></div>`;
       }).join('')}</div>`; }).join('')}
     <div class="btns" style="margin-top:1rem;position:sticky;bottom:0;background:var(--card);padding:.5rem 0"><button class="btn ghost" id="clr">全部清除</button><button class="btn" id="go">開始篩選</button></div>`, (s, close) => {
-    s.querySelectorAll('[data-v]').forEach(i => i.addEventListener('input', () => { s.querySelector(`[data-c="${i.dataset.v}"]`).checked = true; }));
+    s.querySelectorAll('[data-v]').forEach(i => i.addEventListener(i.tagName === 'SELECT' ? 'change' : 'input', () => { s.querySelector(`[data-c="${i.dataset.v}"]`).checked = true; }));
     s.querySelector('#clr').onclick = () => s.querySelectorAll('[data-c]').forEach(c => c.checked = false);
     s.querySelector('#go').onclick = () => {
       const o = {};
@@ -1073,7 +1077,7 @@ function fundCard(key, plain, ind, lastPx){
   add('本益比', f.pe ? num(f.pe, 1) + ' 倍' : null, '股價是一年賺的錢的幾倍，越低代表越便宜');
   add('殖利率', f.y ? num(f.y, 2) + '%' : null, '用現在價格買進，一年領到的股利大約是幾 %');
   add('股價淨值比', f.pb ? num(f.pb, 2) + ' 倍' : null, '股價是公司每股淨資產的幾倍，低於 1 代表比帳面價值便宜');
-  add('最近一季 EPS', f.eps != null ? `<span class="${cls(f.eps)}">${num(f.eps, 2)} 元</span>${f.epsq ? `<div class="sub small">${esc(f.epsq)}</div>` : ''}` : null, '每一股賺多少錢，負數代表虧損');
+  add(f.epsq === '近四季' ? '近四季 EPS' : '最近一季 EPS', f.eps != null ? `<span class="${cls(f.eps)}">${num(f.eps, 2)} 元</span>${f.epsq ? `<div class="sub small">${esc(f.epsq)}</div>` : ''}` : null, '每一股賺多少錢，負數代表虧損');
   add('最新月營收', f.rev ? `${yi(f.rev * (f.rev < 1e7 ? 1000 : 1))} 元${f.yoy != null ? `<div class="small ${cls(f.yoy)}">比去年同月 ${pct(f.yoy)}</div>` : ''}` : null, f.revm ? `${esc(f.revm)} 的營收` : '');
   add('董事長', f.chair ? esc(f.chair) : null);
   add('成立日期', f.est);

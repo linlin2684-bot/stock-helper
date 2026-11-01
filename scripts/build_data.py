@@ -629,6 +629,10 @@ def process_market(mkt, universe, frames_by_id, names, extra=None):
         fb = streak_pos([x[1] for x in ch]) if ch else None
         tb = streak_pos([x[2] for x in ch]) if ch else None
         f = ex.get('f') or {}
+        if f.get('eps') is None and f.get('pe') and f['pe'] > 0:  # 公開資料的季 EPS 不完整：用本益比反推近四季 EPS
+            f['eps'] = r2(c[-1] / f['pe']); f['epsq'] = '近四季'
+        if f.get('yoy') is not None:
+            f['yoy'] = r2(f['yoy'])
         m.update(id=sid, n=u['n'], ind=u.get('ind', ''), fb=fb, tb=tb, fn=ch[-1][1] if ch else None, tn=ch[-1][2] if ch else None,
                  y=f.get('y'), pe=f.get('pe'), pb=f.get('pb'), dy=dy, yoy=f.get('yoy'), eps=f.get('eps'))
         rows.append([m.get(k) for k in cols])

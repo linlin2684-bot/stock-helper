@@ -1,5 +1,5 @@
 // 股票小幫手 service worker：讓 App 外殼可離線開啟，股價資料一律走網路
-const CACHE = 'stock-helper-v2';
+const CACHE = 'stock-helper-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
