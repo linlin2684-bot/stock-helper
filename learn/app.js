@@ -27,6 +27,7 @@ applyFont();
 function addActivity(xp){
   S.days[today()] = (S.days[today()] || 0) + 1;
   S.xp += xp; save();
+  if (typeof checkBadges === 'function') checkBadges();
 }
 function streak(){
   let n = 0; const d = new Date();
@@ -82,12 +83,13 @@ function route(){
   closeSheet(); stopSpeak();
   const ov = $('.lesson'); if (ov && !h.startsWith('l-')) ov.remove();
   document.body.style.overflow = '';
-  const tab = h.startsWith('l-') ? 'home' : h.startsWith('x-') ? 'practice' : h;
+  const TAB = { cards: 'practice', pattern: 'practice', dcasim: 'sim', market: 'home', badges: 'home', videos: 'home', review: 'home', settings: 'home' };
+  const tab = h.startsWith('l-') ? 'home' : h.startsWith('x-') ? 'practice' : TAB[h] || h;
   $$('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.t === tab));
   if (h.startsWith('l-')) return openLesson(h.slice(2));
   window.scrollTo(0, 0);
   if (h.startsWith('x-')) return pageExplain(decodeURIComponent(h.slice(2)), tok);
-  ({ home: pageHome, practice: pagePractice, sim: pageSim, dict: pageDict, settings: pageSettings, review: pageReview, videos: pageVideos }[h] || pageHome)(tok);
+  ({ home: pageHome, practice: pagePractice, sim: pageSim, dict: pageDict, settings: pageSettings, review: pageReview, videos: pageVideos, market: pageMarket, cards: pageCards, pattern: pagePattern, dcasim: pageDcaSim, badges: pageBadges }[h] || pageHome)(tok);
 }
 window.addEventListener('hashchange', route);
 
@@ -112,8 +114,10 @@ function pageHome(){
     ${nl ? `<a class="next" href="#l-${nl.id}"><div class="k">${todayDone ? '想多學一點？' : '今天的課'}・${esc(nl.unit.title.replace(/\s+/g, ' '))}</div>
       <div class="t">第 ${nl.no} 課　${esc(nl.title)}</div><span class="go">開始上課（約 ${nl.min} 分鐘）›</span></a>`
       : `<div class="card center"><div class="big">🎓</div><b>全部 ${LESSONS.length} 課都上完了！</b><p class="sub">可以到練習、模擬繼續加強，或重上任何一課。</p></div>`}
+    <div id="mktcard"></div>
     <div id="vidcard"></div>
     ${wrongN ? `<a class="card row" href="#review" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">📝</span><div class="grow"><b>複習答錯的題目</b><div class="sub">還有 ${wrongN} 題，答對就會從清單移除</div></div><span class="sub">›</span></a>` : ''}
+    <a class="card row" href="#badges" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">🏅</span><div class="grow"><b>成就徽章</b><div class="sub">已獲得 ${BADGES.filter(b => S.badges[b[0]]).length} / ${BADGES.length} 個</div></div><span class="sub">›</span></a>
     <div class="card"><div class="row" style="margin-bottom:.4rem"><b class="grow">全部進度</b><span class="sub">${doneN} / ${LESSONS.length} 課</span></div>
       <div class="bar"><b style="width:${doneN / LESSONS.length * 100}%"></b></div></div>
     ${UNITS.map(u => {
@@ -126,14 +130,15 @@ function pageHome(){
         ${dd ? `<span class="stars">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span>` : ''}</a>`; }).join('')}</div>`;
     }).join('')}
     <p class="disclaimer">學習進度存在這支手機。內容僅供學習，不構成投資建議。<br><a href="../">開啟股票小幫手 ›</a></p>`;
-  mountTodayVideos($('#vidcard'));
+  mountTodayVideos($('#vidcard')); mountMarketCard($('#mktcard'));
   const w = $('#welok'); if (w) w.onclick = () => { S.seen.welcome = 1; save(); pageHome(); };
 }
 
 /* ---------------- 上課 ---------------- */
 function renderRich(html){
   return html.replace(/\[\[(.+?)\]\]/g, (_, t) => { const [k, show] = t.split('|'); return `<span class="term" data-t="${esc(k)}">${esc(show || k)}</span>`; })
-             .replace(/\{\{w:(.+?)\}\}/g, (_, w) => `<div class="w" data-w="${esc(w)}"><div class="skeleton"></div></div>`);
+             .replace(/\{\{w:(.+?)\}\}/g, (_, w) => `<div class="w" data-w="${esc(w)}"><div class="skeleton"></div></div>`)
+             .replace(/\{\{l:(l\d+)\}\}/g, (_, id) => lessonLink(id));
 }
 let L = null;  // 目前上課狀態
 function openLesson(id){

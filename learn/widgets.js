@@ -22,7 +22,7 @@ function chartSVG(rows, opt){
   const mas = opt.ma ? [[5, 'var(--ma5)'], [20, 'var(--ma20)'], [60, 'var(--ma60)']].map(([k, col]) => [smaArr(C, k), col]) : [];
   let hi = -Infinity, lo = Infinity;
   for (let i = from; i < to; i++){ hi = Math.max(hi, rows[i][2]); lo = Math.min(lo, rows[i][3]); mas.forEach(([m]) => { if (m[i] != null){ hi = Math.max(hi, m[i]); lo = Math.min(lo, m[i]); } }); }
-  const padP = (hi - lo) * 0.06 || hi * 0.02; hi += padP; lo -= padP;
+  const padP = (hi - lo) * 0.06 || hi * 0.02; hi += padP * (opt.labels ? 3 : 1); lo -= padP;
   const y = p => 8 + (hi - p) / (hi - lo) * (PH - 8);
   const x = i => (i - from) * cw + cw / 2;
   let s = `<svg class="chart" viewBox="0 0 ${Wd} ${H}" xmlns="http://www.w3.org/2000/svg">`;
@@ -52,6 +52,10 @@ function chartSVG(rows, opt){
     s += `<line x1="${x(i)}" x2="${x(i)}" y1="${y(h)}" y2="${y(l)}" stroke="${col}" stroke-width="1"/>
       <rect x="${x(i) - bw / 2}" y="${y(Math.max(o, c))}" width="${bw}" height="${Math.max(1, Math.abs(y(o) - y(c)))}" fill="${col}"/>`;
   }
+  (opt.labels || []).forEach(({ i, t }) => {
+    s += `<circle cx="${x(i)}" cy="${y(rows[i][2]) - 12}" r="8" fill="var(--gold)"/><text x="${x(i)}" y="${y(rows[i][2]) - 8.5}" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">${t}</text>
+      <line x1="${x(i)}" x2="${x(i)}" y1="${y(rows[i][2]) - 4}" y2="${y(rows[i][2]) - 1}" stroke="var(--gold)" stroke-width="1.5"/>`;
+  });
   mas.forEach(([m, col]) => {
     let d = ''; for (let i = from; i < to; i++) if (m[i] != null) d += (d ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(m[i]).toFixed(1);
     if (d) s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.4"/>`;
@@ -357,7 +361,93 @@ W.plan = el => {
     $('#psum', el).innerHTML = `<div>每月 ${fmt0(P.monthly)} 元 → 約 ${fmt0(P.monthly * P.etf / 100)} 元買 ETF、${fmt0(P.monthly * P.stock / 100)} 元買個股、${fmt0(P.monthly * P.cash / 100)} 元留現金</div>
       ${warn.length ? warn.map(w => `<div class="warn small" style="margin:.4rem 0 0">⚠️ ${w}</div>`).join('') : '<div style="margin-top:.3rem">✅ 這個計畫看起來很穩健！</div>'}`;
   };
-  $$('select,input,textarea', el).forEach(x => x.addEventListener('input', () => upd(x.id.startsWith('pa_') ? x.id.slice(3) : null)));
+  $$('select,input,textarea', el).forEach(x => x.addEventListener('input', () => { P.touched = 1; upd(x.id.startsWith('pa_') ? x.id.slice(3) : null); }));
   $('#pcp', el).onclick = async () => { try { await navigator.clipboard.writeText(text()); toast('已複製，可以貼到 LINE 或備忘錄'); } catch (_) { toast('複製失敗，請截圖保存'); } };
   upd();
+};
+
+/* ---------------- 損益表瀑布 ---------------- */
+W.income = el => {
+  const F = [['rv', '營收（億）', 50, 200, 5, 100], ['cg', '營業成本占營收', 30, 90, 1, 60], ['ox', '營業費用占營收', 5, 30, 1, 15], ['nx', '業外收支（億）', -10, 20, 1, 2]];
+  el.innerHTML = F.map(([k, t, mn, mx, st, v]) => `<div class="field"><label>${t}</label><input type="range" id="i_${k}" min="${mn}" max="${mx}" step="${st}" value="${v}"><b id="iv_${k}" class="num" style="min-width:3.6em;text-align:right"></b></div>`).join('') + '<div id="ig"></div><div class="res" id="ir"></div>';
+  const calc = () => {
+    const g = k => +$('#i_' + k, el).value, rv = g('rv'), cost = rv * g('cg') / 100, gp = rv - cost, opx = rv * g('ox') / 100, op = gp - opx, nx = g('nx');
+    const pre = op + nx, tax = pre > 0 ? pre * 0.2 : 0, ni = pre - tax, shares = 10, eps = ni / shares;
+    $('#iv_rv', el).textContent = rv; $('#iv_cg', el).textContent = g('cg') + '%'; $('#iv_ox', el).textContent = g('ox') + '%'; $('#iv_nx', el).textContent = (nx > 0 ? '+' : '') + nx;
+    const bars = [['營收', rv, 'var(--accent)'], ['毛利', gp, 'var(--ma60)'], ['營業利益', op, 'var(--ma20)'], ['稅後淨利', ni, 'var(--gold)']];
+    const mx = Math.max(...bars.map(b => Math.abs(b[1])), 1);
+    $('#ig', el).innerHTML = `<svg viewBox="0 0 320 ${bars.length * 30}" style="width:100%;height:auto">${bars.map(([t, v, c], i) => `<text x="0" y="${i * 30 + 19}" font-size="12" fill="var(--text)">${t}</text>
+      <rect x="70" y="${i * 30 + 6}" width="${Math.max(1, Math.abs(v) / mx * 190)}" height="18" rx="3" fill="${v < 0 ? 'var(--down)' : c}"/>
+      <text x="${74 + Math.abs(v) / mx * 190}" y="${i * 30 + 19}" font-size="11" fill="var(--sub)">${fmt(v, 1)} 億</text>`).join('')}</svg>`;
+    $('#ir', el).innerHTML = `<div>毛利率 <b>${fmt(gp / rv * 100, 1)}%</b>・營業利益率 <b>${fmt(op / rv * 100, 1)}%</b>・淨利率 <b>${fmt(ni / rv * 100, 1)}%</b></div>
+      <div>股數 10 億股 → <b>EPS ${fmt(eps)} 元</b></div>
+      ${op > 0 && nx > op * 0.5 ? '<div class="warn small" style="margin:.4rem 0 0">⚠️ 業外收入占比很高，這種獲利不一定能持續。</div>' : ''}${op <= 0 ? '<div class="warn small" style="margin:.4rem 0 0">⚠️ 本業在虧錢（營業利益是負的）。</div>' : ''}`;
+  };
+  $$('input', el).forEach(x => x.oninput = calc); calc();
+};
+
+/* ---------------- 景氣燈號 ---------------- */
+W.light = el => {
+  const L = [[38, 45, '紅燈', '#e03131', '景氣熱絡，甚至有過熱的疑慮'], [32, 37, '黃紅燈', 'linear-gradient(90deg,#f59f00 50%,#e03131 50%)', '景氣活絡，要注意後續是否轉熱或轉弱'], [23, 31, '綠燈', '#2f9e44', '景氣穩定'], [17, 22, '黃藍燈', 'linear-gradient(90deg,#f59f00 50%,#1c7ed6 50%)', '景氣轉弱，要注意是否繼續下滑'], [9, 16, '藍燈', '#1c7ed6', '景氣低迷']];
+  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:.4rem">${L.slice().reverse().map(([a, b, t, c]) => `<div class="center small" style="flex:1"><i style="display:block;width:1.6rem;height:1.6rem;border-radius:50%;margin:0 auto .2rem;background:${c}"></i>${t}<div class="sub" style="font-size:.7rem">${a}–${b}</div></div>`).join('')}</div>
+    <div class="field"><label>景氣分數</label><input type="range" id="ls" min="9" max="45" value="28"><b id="lv" class="num" style="min-width:2.5em;text-align:right"></b></div><div class="res" id="lr"></div>`;
+  const draw = () => { const v = +$('#ls', el).value, x = L.find(([a, b]) => v >= a && v <= b);
+    $('#lv', el).textContent = v;
+    $('#lr', el).innerHTML = `<div class="row"><i style="width:2.2rem;height:2.2rem;border-radius:50%;background:${x[3]};flex:0 0 auto"></i><div><b>${x[2]}</b>：${x[4]}</div></div><div class="sub small" style="margin-top:.3rem">分數由 9 項經濟數據（貨幣、股價、出口、工業生產、就業等）各給 1～5 分加總。</div>`; };
+  $('#ls', el).oninput = draw; draw();
+};
+
+/* ---------------- 定存 vs 股票殖利率 ---------------- */
+W.rate = el => {
+  el.innerHTML = `<div class="field"><label>定存利率</label><input type="range" id="rd" min="0.5" max="6" step="0.25" value="1.75"><b id="rdv" class="num" style="min-width:3.5em;text-align:right"></b></div>
+    <div class="field"><label>股票殖利率</label><input type="range" id="ry" min="1" max="8" step="0.25" value="4.5"><b id="ryv" class="num" style="min-width:3.5em;text-align:right"></b></div><div class="res" id="rr"></div>`;
+  const draw = () => { const d = +$('#rd', el).value, y = +$('#ry', el).value, gap = y - d;
+    $('#rdv', el).textContent = d + '%'; $('#ryv', el).textContent = y + '%';
+    $('#rr', el).innerHTML = `<div>100 萬放一年：定存利息約 <b>${fmt0(10000 * d)}</b> 元；股票股利約 <b>${fmt0(10000 * y)}</b> 元</div>
+      <div>股票多拿 <b class="${cls(gap)}">${fmt(gap)}%</b>，但要承擔股價可能大跌的風險。</div>
+      <div class="sub small" style="margin-top:.3rem">${gap < 1 ? '差距很小時，很多人會覺得「不如放定存」，股票的吸引力下降——這就是升息對股市有壓力的原因之一。' : '差距夠大時，願意承擔風險買股票的人比較多。'}</div>`; };
+  $$('input', el).forEach(x => x.oninput = draw); draw();
+};
+
+/* ---------------- 匯率對美股報酬的影響 ---------------- */
+W.fx = el => {
+  el.innerHTML = `<div class="sub small">投資 1 萬美元買美股</div>
+    <div class="field"><label>買進時匯率</label><input type="range" id="fa" min="28" max="35" step="0.5" value="32"><b id="fav" class="num" style="min-width:3em;text-align:right"></b></div>
+    <div class="field"><label>美股漲跌</label><input type="range" id="fr" min="-30" max="50" step="1" value="10"><b id="frv" class="num" style="min-width:3em;text-align:right"></b></div>
+    <div class="field"><label>賣出時匯率</label><input type="range" id="fb" min="28" max="35" step="0.5" value="30"><b id="fbv" class="num" style="min-width:3em;text-align:right"></b></div><div class="res" id="fres"></div>`;
+  const draw = () => { const a = +$('#fa', el).value, r = +$('#fr', el).value, b = +$('#fb', el).value;
+    $('#fav', el).textContent = a; $('#frv', el).textContent = (r > 0 ? '+' : '') + r + '%'; $('#fbv', el).textContent = b;
+    const twIn = 10000 * a, twOut = 10000 * (1 + r / 100) * b, tr = (twOut / twIn - 1) * 100;
+    $('#fres', el).innerHTML = `<div>投入台幣 ${fmt0(twIn)} 元 → 換回 <b>${fmt0(twOut)}</b> 元</div>
+      <div>美元報酬 <b class="${cls(r)}">${pct(r, 0)}</b>，台幣報酬 <b class="${cls(tr)}">${pct(tr, 1)}</b></div>
+      <div class="sub small">${b < a ? '新台幣升值（數字變小），吃掉了一部分報酬。' : b > a ? '新台幣貶值（數字變大），多賺了匯差。' : '匯率沒變，報酬一樣。'}</div>`; };
+  $$('input', el).forEach(x => x.oninput = draw); draw();
+};
+
+/* ---------------- 投資性格小測驗 ---------------- */
+W.bias = el => {
+  const Q = [
+    ['你買的股票跌了 20%，你會？', [['馬上賣掉，不想再痛', 'loss'], ['抱著，等漲回買價再說', 'anchor'], ['先檢查公司和買的理由有沒有變', 'ok']]],
+    ['你買的股票漲了 10%，你會？', [['趕快賣，落袋為安', 'disp'], ['照原本計畫，理由還在就續抱', 'ok'], ['加碼，我果然很會選', 'over']]],
+    ['朋友都在聊某支熱門股，說已經賺很多，你會？', [['趕快也買一點，怕錯過', 'herd'], ['先查資料，看懂才考慮', 'ok'], ['覺得自己比他們會選，買更多', 'over']]],
+    ['你看好的股票出現壞消息，你會？', [['覺得是亂寫的，不理它', 'conf'], ['認真看是不是影響公司', 'ok'], ['馬上全部賣掉', 'loss']]],
+    ['股市已經連漲好幾個月，你覺得？', [['會一直漲，要趕快 all in', 'recent'], ['照計畫定期定額，不追高也不猜', 'ok'], ['一定要崩了，全部賣光', 'recent']]],
+  ];
+  const D = { loss: ['損失規避', '跌的時候容易恐慌賣出。對策：只用閒錢、少看帳戶、事先寫好停損規則。'], anchor: ['錨定效應', '容易被買價綁住。對策：問自己「現在拿著現金，還會買它嗎？」'], disp: ['處分效應', '賺一點就想賣。對策：先寫好「什麼情況才賣」，不只看漲多少。'], over: ['過度自信', '容易加大金額冒險。對策：設定單一股票上限，不借錢投資。'], herd: ['從眾效應', '容易跟著大家追高。對策：買之前一定先查資料，用定期定額。'], conf: ['確認偏誤', '容易忽略壞消息。對策：買之前刻意找一個反對的理由。'], recent: ['近因偏誤', '容易被最近的漲跌帶著走。對策：看長期資料，照計畫執行。'] };
+  let i = 0; const pick = [];
+  const draw = () => {
+    if (i >= Q.length){
+      const cnt = {}; pick.forEach(k => cnt[k] = (cnt[k] || 0) + 1);
+      const traps = Object.keys(cnt).filter(k => k !== 'ok'), ok = cnt.ok || 0;
+      S.biasDone = 1; save();
+      el.innerHTML = `<div class="res"><b>你答了 ${ok} 題「冷靜派」答案</b>${traps.length ? '<div style="margin-top:.4rem">要特別注意的陷阱：</div>' + traps.map(k => `<div style="margin:.3rem 0">• <b>${D[k][0]}</b>：${D[k][1]}</div>`).join('') : '<div>很冷靜！記得真的遇到大漲大跌時，也照這樣做。</div>'}
+        <div class="sub small">每個人都有這些傾向，知道自己容易犯哪一種，就能提前防範。</div></div><button class="btn ghost block" id="bagain" style="margin-top:.5rem">重新測一次</button>`;
+      $('#bagain', el).onclick = () => { i = 0; pick.length = 0; draw(); };
+      return;
+    }
+    const [q, os] = Q[i];
+    el.innerHTML = `<div class="sub small">第 ${i + 1} / ${Q.length} 題</div><b>${q}</b>${os.map(([t, k], j) => `<button class="opt" data-j="${j}">${t}</button>`).join('')}`;
+    $$('.opt', el).forEach(b => b.onclick = () => { pick.push(os[+b.dataset.j][1]); i++; draw(); });
+  };
+  draw();
 };

@@ -4,10 +4,12 @@ const POOL_TW = ['2330', '2317', '2454', '2412', '2881', '2882', '2891', '2303',
 const POOL_US = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'TSM', 'KO', 'VOO', 'QQQ'];
 const closeArr = rows => rows.map(r => r[4]);
 
-async function randStock(pool, minLen = 70, tries = 6){
+async function randStock(pool, minLen = 70, tries = 6, noWatch){
+  const okTw = pool.some(p => isTW(p)), okUs = pool.some(p => !isTW(p)), okEtf = pool.some(p => p.startsWith('00'));
+  const w = noWatch || typeof watchIds !== 'function' ? [] : watchIds().filter(id => (isTW(id) ? okTw : okUs) && (okEtf || !id.startsWith('00')));
   for (let k = 0; k < tries; k++){
-    const id = pickOne(pool), mkt = mktOf(id), d = await stock(mkt, id);
-    if (d && d.r && d.r.length >= minLen) return { id, mkt, d, nm: (await names())[mkt][id] || id };
+    const fromW = w.length && Math.random() < 0.4, id = fromW ? pickOne(w) : pickOne(pool), mkt = mktOf(id), d = await stock(mkt, id);
+    if (d && d.r && d.r.length >= minLen) return { id, mkt, d, nm: (w.includes(id) ? '⭐ ' : '') + ((await names())[mkt][id] || id) };
   }
   return null;
 }
@@ -139,10 +141,14 @@ function pagePractice(tok){
       <p style="margin:.2rem 0 .6rem">輸入任何股票，把它的走勢、本益比、殖利率、法人動向，<b>一項一項翻成白話</b>。</p>
       <div class="search" style="box-shadow:none;background:var(--bg);margin:0"><span>🔍</span><input id="sq" placeholder="例如 2330、台積電、AAPL" autocomplete="off" enterkeyhint="search"></div>
       <div class="list" id="sr"></div>
-      <div class="chips" style="margin-top:.6rem">${[['2330', '台積電'], ['0050', '元大台灣50'], ['00878', '國泰永續高股息'], ['2412', '中華電'], ['AAPL', '蘋果'], ['NVDA', '輝達']].map(([k, n]) => `<button data-x="${k}">${n}</button>`).join('')}</div></div>
+      ${hasRealWatch() && watchIds().length ? `<div class="sub small" style="margin-top:.6rem">⭐ 我的自選股（來自股票小幫手）</div><div class="chips" style="margin-top:.3rem">${watchIds().map(k => `<button data-x="${esc(k)}">${esc(k)}</button>`).join('')}</div>` : ''}
+      <div class="sub small" style="margin-top:.6rem">熱門</div><div class="chips" style="margin-top:.3rem">${[['2330', '台積電'], ['0050', '元大台灣50'], ['00878', '國泰永續高股息'], ['2412', '中華電'], ['AAPL', '蘋果'], ['NVDA', '輝達']].map(([k, n]) => `<button data-x="${k}">${n}</button>`).join('')}</div></div>
+    <a class="card row" href="#cards" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">🃏</span><div class="grow"><b>名詞閃卡</b><div class="sub">${fcDue().length ? `今天有 ${fcDue().length} 張要複習` : '學過的名詞，隔一段時間再考一次，記得更牢'}</div></div><span class="sub">›</span></a>
+    <a class="card row" href="#pattern" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">🔍</span><div class="grow"><b>看圖找型態</b><div class="sub">在真實走勢圖裡找出長上影線、十字線、爆量、黃金交叉</div></div><span class="sub">›</span></a>
     ${Object.keys(S.wrong).length ? `<a class="card row" href="#review" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">📝</span><div class="grow"><b>複習課後答錯的題目</b><div class="sub">${Object.keys(S.wrong).length} 題</div></div><span class="sub">›</span></a>` : ''}
     <p class="disclaimer">練習只是幫你看懂數字，不是買賣建議。</p>`;
   $('#go').onclick = startPractice;
+  names().then(N => $$('[data-x]').forEach(b => { if (/^[0-9A-Z.^]+$/.test(b.textContent)){ const n = N[mktOf(b.dataset.x)][b.dataset.x]; if (n) b.textContent = n; } }));
   $$('[data-x]').forEach(b => b.onclick = () => location.hash = '#x-' + mktOf(b.dataset.x) + '-' + b.dataset.x);
   let L2 = null;
   $('#sq').oninput = async e => {
@@ -171,6 +177,7 @@ async function pageExplain(p, tok){
   const [d, sc, nm] = await Promise.all([stock(mkt, id), data(`screen-${mkt}.json`), names()]);
   if (!alive(tok)) return;
   if (!d || !d.r || d.r.length < 2){ app.innerHTML = '<div class="card"><p>📡 這支股票的資料暫時抓不到。</p><a href="#practice">回練習</a></div>'; return; }
+  S.xn = (S.xn || 0) + 1; save(); checkBadges();
   const ci = sc ? Object.fromEntries(sc.cols.map((c, k) => [c, k])) : {}, row = sc?.rows.find(r => r[0] === id);
   const g = k => row ? row[ci[k]] : null, name = nm[mkt][id] || row?.[ci.n] || id, f = d.f || {};
   const isETF = mkt === 'tw' ? id.startsWith('00') : ['SPY', 'VOO', 'IVV', 'QQQ', 'DIA', 'VTI', 'VT', 'IWM', 'SOXX', 'SMH', 'SCHD', 'JEPI', 'VIG', 'TLT', 'BND', 'GLD'].includes(id);
@@ -218,44 +225,56 @@ function pageSim(){
     <div class="card"><h2>🕰️ 回到過去的某一天</h2>
       <p style="margin:.2rem 0">系統隨機挑一支<b>真實股票</b>，帶你回到過去某一天，只給你看<b>那天以前</b>的走勢圖（不告訴你是哪一支）。</p>
       <p style="margin:.4rem 0">你決定：<b class="up">買進</b>（抱 20 個交易日）或<b>不買</b>。然後時光機往前跑，揭曉之後真正發生什麼事。</p>
-      <div class="seg" id="mk" style="margin:.7rem 0">${[['tw', '台股'], ['us', '美股'], ['etf', 'ETF']].map(([k, t], i) => `<button data-k="${k}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div>
+      <div class="sub small" style="margin-top:.6rem">股票來源</div>
+      <div class="seg" id="mk" style="margin:.3rem 0">${[['tw', '台股'], ['us', '美股'], ['etf', 'ETF'], ...(watchIds().length ? [['watch', '⭐自選']] : [])].map(([k, t], i) => `<button data-k="${k}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div>
+      <div class="sub small" style="margin-top:.4rem">買進後抱多久</div>
+      <div class="seg" id="hd" style="margin:.3rem 0">${[[5, '5 天'], [20, '20 天'], [60, '60 天']].map(([k, t]) => `<button data-k="${k}" class="${k === 20 ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <div class="sub small" style="margin-top:.4rem">停損（跌到就自動賣）</div>
+      <div class="seg" id="sl" style="margin:.3rem 0 .7rem">${[[0, '不設'], [5, '−5%'], [8, '−8%'], [10, '−10%']].map(([k, t]) => `<button data-k="${k}" class="${k ? '' : 'on'}">${t}</button>`).join('')}</div>
       <button class="btn block" id="go">開始一局</button></div>
+    <a class="card row" href="#dcasim" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">⏩</span><div class="grow"><b>快轉定期定額</b><div class="sub">回到兩年前，一個月一個月快轉，體驗大跌時撐不撐得住</div></div><span class="sub">›</span></a>
     ${n ? `<div class="card"><h2>📒 我的紀錄</h2>
       <div class="kv"><div><span>玩了</span><b>${n} 局</b></div><div><span>判斷正確</span><b>${Math.round(right / n * 100)}%</b></div>
       <div><span>選擇買進</span><b>${bought.length} 次</b></div><div><span>每次買 10 萬，合計</span><b class="${cls(pnl)}">${pnl >= 0 ? '+' : ''}${fmt0(pnl)} 元</b></div></div>
       <div class="list" style="margin-top:.5rem">${tm.slice(-8).reverse().map(x => `<div class="item"><span>${x.c === 'buy' ? '🛒' : '✋'}</span><div class="grow"><b>${esc(x.n)}</b> <span class="sub small">${x.d}</span>
-        <div class="sub small">${x.c === 'buy' ? '買進' : '不買'} → 之後 20 天 <span class="${cls(x.r)}">${pct(x.r * 100, 1)}</span></div></div><span>${(x.c === 'buy') === (x.r > 0) ? '✅' : '❌'}</span></div>`).join('')}</div>
+        <div class="sub small">${x.c === 'buy' ? '買進' : '不買'} → 之後 ${x.h || 20} 天${x.sl ? `（停損 −${x.sl}%）` : ''} <span class="${cls(x.r)}">${pct(x.r * 100, 1)}</span></div></div><span>${(x.c === 'buy') === (x.r > 0) ? '✅' : '❌'}</span></div>`).join('')}</div>
       <p class="sub small" style="margin:.4rem 0 0">判斷正確＝買了之後有賺，或不買而之後真的跌（已扣買賣成本）。</p></div>` : ''}
     <div class="card"><h2>💼 想用今天的價格練習買賣？</h2><p style="margin:.2rem 0 .6rem">股票小幫手有「模擬買賣」：用虛擬的錢、真實的每日收盤價，練習下單和看損益。</p>
       <a class="btn ghost block" href="../#portfolio">開啟模擬買賣 ›</a></div>
     <p class="disclaimer">玩幾局就會發現：沒有任何一個訊號 100% 準，所以才需要分散、紀律和控制風險。</p>`;
-  let mk = 'tw';
-  $$('#mk button').forEach(b => b.onclick = () => { mk = b.dataset.k; $$('#mk button').forEach(x => x.classList.toggle('on', x === b)); });
-  $('#go').onclick = () => tmRound(mk);
+  let mk = 'tw', hd = 20, sl = 0;
+  const seg = (id, f) => $$(`#${id} button`).forEach(b => b.onclick = () => { f(b.dataset.k); $$(`#${id} button`).forEach(x => x.classList.toggle('on', x === b)); });
+  seg('mk', v => mk = v); seg('hd', v => hd = +v); seg('sl', v => sl = +v);
+  $('#go').onclick = () => tmRound(mk, hd, sl);
 }
-async function tmRound(mk){
+async function tmRound(mk, H = 20, sl = 0){
   setTop('時光機挑戰', `<a class="iconbtn" href="#sim" onclick="setTimeout(route)">✕</a>`);
   app.innerHTML = '<div class="card"><p class="center">時光機啟動中…</p><div class="skeleton" style="height:12rem"></div></div>';
-  const tok = routeToken, mkt = mk === 'us' ? 'us' : 'tw', sc = await data(`screen-${mkt}.json`);
-  if (tok !== routeToken) return;
+  const tok = routeToken;
   let cand = [];
-  if (sc){
-    const ci = Object.fromEntries(sc.cols.map((c, k) => [c, k]));
-    let rows = sc.rows.filter(r => r[ci.c] > 0 && !/^\^|^_/.test(r[0]));
-    rows = mk === 'etf' ? rows.filter(r => r[0].startsWith('00')) : mk === 'tw' ? rows.filter(r => !r[0].startsWith('00')) : rows;
-    rows.sort((a, b) => b[ci.av] * b[ci.c] - a[ci.av] * a[ci.c]);
-    cand = rows.slice(0, mk === 'etf' ? 40 : 200).map(r => r[0]);
+  if (mk === 'watch') cand = watchIds();
+  else {
+    const sc = await data(`screen-${mk === 'us' ? 'us' : 'tw'}.json`);
+    if (sc){
+      const ci = Object.fromEntries(sc.cols.map((c, k) => [c, k]));
+      let rows = sc.rows.filter(r => r[ci.c] > 0 && !/^\^|^_|^TAIEX|^TPEx/.test(r[0]));
+      rows = mk === 'etf' ? rows.filter(r => r[0].startsWith('00')) : mk === 'tw' ? rows.filter(r => !r[0].startsWith('00')) : rows;
+      rows.sort((a, b) => b[ci.av] * b[ci.c] - a[ci.av] * a[ci.c]);
+      cand = rows.slice(0, mk === 'etf' ? 40 : 200).map(r => r[0]);
+    }
+    if (!cand.length) cand = mk === 'us' ? POOL_US : mk === 'etf' ? POOL_TW.filter(x => x.startsWith('00')) : POOL_TW.filter(x => !x.startsWith('00'));
   }
-  if (!cand.length) cand = mk === 'us' ? POOL_US : mk === 'etf' ? POOL_TW.filter(x => x.startsWith('00')) : POOL_TW.filter(x => !x.startsWith('00'));
-  const s = await randStock(cand, 150, 8);
+  if (tok !== routeToken) return;
+  const s = await randStock(cand, 90 + H, 8, true);
   if (tok !== routeToken) return;
   if (!s){ app.innerHTML = '<div class="card"><p>📡 股價資料暫時抓不到，等一下再試。</p><a class="btn ghost block" href="#sim" onclick="setTimeout(route)">回模擬</a></div>'; return; }
-  const r = s.d.r, t = 80 + Math.floor(Math.random() * (r.length - 80 - 21)), H = 20, from = t - 59;
-  const cost = mkt === 'tw' ? (mk === 'etf' ? 0.00385 : 0.00585) : 0.001;
-  app.innerHTML = `<div class="card"><div class="row"><b class="grow">🕵️ 神秘${mk === 'etf' ? ' ETF' : '股票'}</b><span class="sub small">${mkt === 'tw' ? '台股' : '美股'}</span></div>
+  const mkt = s.mkt, r = s.d.r, t = 70 + Math.floor(Math.random() * (r.length - 70 - H - 1)), from = t - 59;
+  const isEtf = mkt === 'tw' && s.id.startsWith('00'), cost = mkt === 'tw' ? (isEtf ? 0.00385 : 0.00585) : 0.001;
+  const benchId = mkt === 'tw' ? '0050' : 'VOO';
+  app.innerHTML = `<div class="card"><div class="row"><b class="grow">🕵️ 神秘${isEtf ? ' ETF' : '股票'}</b><span class="sub small">${mkt === 'tw' ? '台股' : '美股'}・抱 ${H} 天${sl ? `・停損 −${sl}%` : ''}</span></div>
       <div class="sub small">假設今天是圖上最後一天，收盤價 <b style="color:var(--text)">${fmtP(r[t][4])}</b></div>
       <div id="tc"></div><div id="ti"></div></div>
-    <div class="card" id="tq"><b>你會怎麼做？</b><div class="sub small" style="margin:.2rem 0 .6rem">買進的話會抱 20 個交易日（約一個月）再賣。</div>
+    <div class="card" id="tq"><b>你會怎麼做？</b><div class="sub small" style="margin:.2rem 0 .6rem">買進的話會抱 ${H} 個交易日再賣${sl ? `，中間跌超過 ${sl}% 就自動停損賣出` : ''}。</div>
       <div class="btns"><button class="btn red" id="buy">🛒 買進</button><button class="btn gray" id="skip">✋ 不買</button></div>
       <button class="btn ghost block" id="hint" style="margin-top:.6rem">💡 給我一點提示</button></div>`;
   const info = $('#ti');
@@ -267,22 +286,32 @@ async function tmRound(mk){
     $('#hint').outerHTML = `<div class="res"><div>• 股價${C[t] > m20 ? '在' : '低於'}月線、${C[t] > m60 ? '在' : '低於'}季線</div><div>• 近 20 天 <span class="${cls(r20)}">${pct(r20, 1)}</span></div><div>• 最後一天成交量是前 5 天的 ${fmt(vr, 1)} 倍</div>
       <div class="sub small">這些都是線索，不是答案。</div></div>`;
   };
-  const decide = c => {
-    const ret = r[t + H][4] / r[t][4] - 1, net = ret - cost, right = (c === 'buy') === (net > 0);
+  const decide = async c => {
+    const entry = r[t][4]; let exitI = t + H, exitP = r[t + H][4], stopped = false;
+    if (sl){ const stopP = entry * (1 - sl / 100); for (let k = t + 1; k <= t + H; k++){ if (r[k][3] <= stopP){ exitI = k; exitP = Math.min(r[k][1], stopP); stopped = true; break; } } }
+    const holdRet = r[t + H][4] / entry - 1, ret = exitP / entry - 1, net = ret - cost, right = (c === 'buy') === (net > 0);
     let mx = -Infinity, mn = Infinity; for (let k = t + 1; k <= t + H; k++){ mx = Math.max(mx, r[k][2]); mn = Math.min(mn, r[k][3]); }
-    S.tm.push({ id: s.id, n: s.nm, d: r[t][0], c, r: +net.toFixed(4) }); if (S.tm.length > 200) S.tm.shift();
+    S.tm.push({ id: s.id, n: s.nm.replace('⭐ ', ''), d: r[t][0], c, r: +net.toFixed(4), h: H, sl }); if (S.tm.length > 200) S.tm.shift();
     addActivity(right ? 4 : 2);
-    ch.redraw({ to: t + H + 1, mark: t + 1 }); ch.setSel(t + H);
+    ch.redraw({ to: t + H + 1, mark: t + 1 }); ch.setSel(exitI);
     info.innerHTML = '';
+    // 同期間買大盤 ETF 比較
+    let bench = '';
+    if (s.id !== benchId){
+      const b = await stock(mkt, benchId);
+      if (b?.r){ const bi = b.r.findIndex(x => x[0] === r[t][0]), be = b.r.findIndex(x => x[0] === r[t + H][0]);
+        if (bi >= 0 && be > bi){ const br = b.r[be][4] / b.r[bi][4] - 1; bench = `<div>同一段時間買 <b>${benchId}</b>（${mkt === 'tw' ? '台灣 50 大' : 'S&P 500'}）：<b class="${cls(br)}">${pct(br * 100, 1)}</b>${c === 'buy' ? `，你${net > br ? '贏' : '輸'}了大盤` : ''}</div>`; } }
+    }
     $('#tq').innerHTML = `<div class="center"><div class="big">${right ? '🎯' : '🌀'}</div><h3 style="margin:.2rem 0">${right ? '判斷正確！' : '這次沒猜中'}</h3></div>
       <div class="res"><div>這是 <b>${esc(s.nm)}（${esc(s.id)}）</b>，那天是 <b>${r[t][0]}</b></div>
-        <div>20 個交易日後股價 ${fmtP(r[t][4])} → ${fmtP(r[t + H][4])}，<b class="${cls(ret)}">${pct(ret * 100, 1)}</b></div>
-        <div>期間最高 ${fmtP(mx)}（${pct((mx / r[t][4] - 1) * 100, 1)}），最低 ${fmtP(mn)}（${pct((mn / r[t][4] - 1) * 100, 1)}）</div>
+        <div>${H} 個交易日後股價 ${fmtP(entry)} → ${fmtP(r[t + H][4])}，<b class="${cls(holdRet)}">${pct(holdRet * 100, 1)}</b></div>
+        <div>期間最高 ${fmtP(mx)}（${pct((mx / entry - 1) * 100, 1)}），最低 ${fmtP(mn)}（${pct((mn / entry - 1) * 100, 1)}）</div>
+        ${stopped && c === 'buy' ? `<div>⛔ 第 ${exitI - t} 天跌到停損價，以 ${fmtP(exitP)} 賣出${holdRet > ret ? '——結果後來又漲回來，停損有時會「被洗掉」' : '——停損幫你擋住了後面更大的跌幅'}。</div>` : ''}
         <div style="margin-top:.3rem">${c === 'buy' ? `你買了：扣掉手續費和稅約 ${fmt(cost * 100, 2)}% 後，<b class="${cls(net)}">${net >= 0 ? '賺' : '賠'} ${fmt(Math.abs(net) * 100, 1)}%</b>（買 10 萬約 ${net >= 0 ? '賺' : '賠'} ${fmt0(Math.abs(net) * 100000)} 元）`
-          : `你沒買：${net > 0 ? `錯過了約 ${fmt(net * 100, 1)}% 的漲幅` : `避開了約 ${fmt(-net * 100, 1)}% 的損失`}`}</div>
-        ${(mn / r[t][4] - 1) < -0.08 && c === 'buy' ? '<div class="sub small" style="margin-top:.3rem">中間曾經跌超過 8%——如果你當時有設停損，可能會先出場。這就是紀律的難處。</div>' : ''}</div>
+          : `你沒買：${net > 0 ? `錯過了約 ${fmt(net * 100, 1)}% 的漲幅` : `避開了約 ${fmt(-net * 100, 1)}% 的損失`}`}</div>${bench}
+        ${!sl && (mn / entry - 1) < -0.08 && c === 'buy' ? '<div class="sub small" style="margin-top:.3rem">中間曾經跌超過 8%——下次試試設停損，看看結果會不會不一樣。</div>' : ''}</div>
       <div class="btns" style="margin-top:.7rem"><a class="btn gray" href="#sim" onclick="setTimeout(route)">看紀錄</a><button class="btn" id="again">再玩一局</button></div>`;
-    $('#again').onclick = () => tmRound(mk);
+    $('#again').onclick = () => tmRound(mk, H, sl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   $('#buy').onclick = () => decide('buy'); $('#skip').onclick = () => decide('skip');

@@ -130,7 +130,7 @@ input[type=range]{flex:1;accent-color:var(--accent);padding:0;border:0;backgroun
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--card);border-radius:20px 20px 0 0;padding:1.1rem 1.1rem calc(1.2rem + env(safe-area-inset-bottom));max-height:75vh;overflow-y:auto;max-width:720px;margin:0 auto;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
 .sheet h3{margin:0 0 .3rem;font-size:1.25rem}
 .tag{display:inline-block;font-size:.75rem;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:.05rem .45rem;font-weight:600;vertical-align:middle}
-.toast{position:fixed;left:50%;bottom:calc(5.5rem + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.6rem 1rem;border-radius:12px;z-index:50;font-size:.92rem;max-width:90vw}
+.toast{position:fixed;left:50%;bottom:calc(5.5rem + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.6rem 1rem;border-radius:12px;z-index:50;font-size:.92rem;width:max-content;max-width:90vw}
 
 /* 圖表、小工具 */
 .w{background:var(--bg);border-radius:14px;padding:.8rem;margin:.7rem 0}
@@ -171,10 +171,12 @@ svg.chart{width:100%;height:auto;display:block;touch-action:pan-y}
 </nav>
 <script src="lessons.js"></script>
 <script src="glossary.js"></script>
+<script src="lessons-more.js"></script>
 <script src="app.js"></script>
 <script src="widgets.js"></script>
 <script src="practice.js"></script>
 <script src="videos.js"></script>
+<script src="extra.js"></script>
 <script>route();</script>
 </body>
 </html>
