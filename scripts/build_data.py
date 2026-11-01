@@ -318,19 +318,19 @@ def us_universe():
         sym = str(sym).strip().replace('.', '-')
         if sym and sym not in seen and re.fullmatch(r'[A-Z][A-Z\-]{0,6}', sym):
             seen.add(sym); rows.append(dict(id=sym, n=str(name).strip()))
-    for url, symcol, namecol in (('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 'Symbol', 'Security'),
-                                 ('https://en.wikipedia.org/wiki/Nasdaq-100', 'Ticker', 'Company')):
+    for name, url in (('sp500', 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'), ('ndx', 'https://en.wikipedia.org/wiki/Nasdaq-100')):
         try:
-            html = get(url, as_json=False)
+            html = get(url, as_json=False); before = len(rows)
             for t in pd.read_html(StringIO(html)):
                 cols = [str(c) for c in t.columns]
-                if symcol in cols and namecol in cols:
-                    for s, n in zip(t[symcol], t[namecol]):
+                sc = next((c for c in ('Symbol', 'Ticker') if c in cols), None); nc = next((c for c in ('Security', 'Company') if c in cols), None)
+                if sc and nc and len(t) > 80:
+                    for s, n in zip(t[sc], t[nc]):
                         add(s, n)
                     break
-            part('us_list_' + symcol, True, f'{len(rows)} 支')
+            part('us_list_' + name, len(rows) > before, f'新增 {len(rows) - before}，共 {len(rows)} 支')
         except Exception as e:
-            part('us_list_' + symcol, False, e)
+            part('us_list_' + name, False, e)
     for s in ETF_US + EXTRA_US:
         add(s, s)
     return rows
@@ -521,13 +521,16 @@ def fundamentals(codes):
             part(f'rev_{base}', False, e)
     # EPS（各產業的綜合損益表）
     for base in ('twse', 'tpex'):
-        n = 0; paths = find_paths(base, ['綜合損益表'], every=True)
+        n = 0; suf = '_L' if base == 'twse' else '_O'
+        paths = [x for x in find_paths(base, ['綜合損益表'], every=True) if suf in x]
         for path in paths:
             try:
-                for r in as_records(api(base, path)):
+                recs = as_records(api(base, path)); before = n
+                for r in recs:
                     c = str(pick(r, '公司代號', 'CompanyCode', 'Code') or '').strip(); e = num(pick(r, '每股盈餘', 'EPS', 'EarningsPerShare'))
                     if c in F and e is not None:
                         F[c].update(eps=e, epsq=f"{pick(r, '年度', 'Year') or ''}Q{pick(r, '季別', 'Season', 'Quarter') or ''}"); n += 1
+                log('EPS 表', path, len(recs), '筆，對到', n - before, '；欄位', list(recs[0].keys())[:8] if recs else [])
                 time.sleep(0.5)
             except Exception as e:
                 log('EPS 失敗', base, path, e)
@@ -692,6 +695,16 @@ def main():
     dump('list.json', {'tw': [[u['id'], u['n'], u.get('ind', ''), u['mk']] for u in tw if u['id'] in frames_tw] + [['TAIEX', '台股加權指數', '大盤', 'twse']],
                        'us': [[u['id'], u['n']] for u in us if u['id'] in frames_us]})
     STATUS['seconds'] = round(time.time() - T0)
+    try:  # 抽查幾筆資料，方便看紀錄檢查
+        ci = {k: n for n, k in enumerate(['id', 'n', 'ind', 'c', 'chg', 'st', 'vr', 'av', 'vt', 'a20', 'a60', 'gx', 'kx', 'rsi', 'nh20', 'nh60', 'dd60', 'r5', 'r20', 'lu', 'fb', 'tb', 'fn', 'tn', 'y', 'pe', 'pb', 'dy', 'yoy', 'eps'])}
+        log('抽查 有值的筆數', {k: sum(1 for r in rows_tw if r[ci[k]] is not None) for k in ('y', 'pe', 'fb', 'yoy', 'eps', 'dy')})
+        for sid in ('2330', '0050', '6488'):
+            r = next((x for x in rows_tw if x[0] == sid), None); log('抽查', sid, r)
+            e = extra.get(sid, {}); log('  法人', (e.get('ch') or [])[-2:], ' 基本', e.get('f'))
+        log('抽查 除權息', json.load(open(OUT / 'div.json', encoding='utf-8'))[:3])
+        log('抽查 AAPL', next((x for x in rows_us if x[0] == 'AAPL'), None))
+    except Exception as e:
+        log('抽查失敗', e)
     dump('status.json', STATUS)
     log('完成', STATUS.get('tw_date'), STATUS.get('us_date'), f'台股 {len(rows_tw)} 支、美股 {len(rows_us)} 支')
     bad = [k for k, v in STATUS['parts'].items() if not v['ok']]
