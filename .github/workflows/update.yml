@@ -12,6 +12,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write   # 讓排程保持啟用（GitHub 會暫停 60 天沒活動的公開專案排程）
 
 concurrency:
   group: pages
@@ -50,7 +51,17 @@ jobs:
           key: state-${{ github.run_id }}
 
       - name: 放入 App 檔案
-        run: cp index.html sw.js manifest.webmanifest icon-*.png site/
+        run: |
+          cp index.html sw.js manifest.webmanifest icon-*.png site/
+          V="${GITHUB_SHA::7}"
+          sed -i "s/__APP_VERSION__/$V/" site/index.html
+          echo "{\"v\":\"$V\"}" > site/version.json
+
+      - name: 保持每日排程啟用
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable update.yml --repo "${{ github.repository }}"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
