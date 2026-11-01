@@ -1,0 +1,68 @@
+name: 更新股價資料並發布 App
+
+on:
+  schedule:
+    - cron: '20 9 * * 1-5'    # 台灣時間 週一～五 17:20（台股收盤、法人資料公布後）
+    - cron: '40 21 * * 1-5'   # 台灣時間 週二～六 05:40（美股收盤後）
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - run: pip install -r scripts/requirements.txt
+
+      - name: 取回上次的法人買賣紀錄
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+
+      - name: 抓資料、計算指標
+        run: python scripts/build_data.py --out site/data --state state
+
+      - name: 保存法人買賣紀錄
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: state-${{ github.run_id }}
+
+      - name: 放入 App 檔案
+        run: cp index.html sw.js manifest.webmanifest icon-*.png site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
