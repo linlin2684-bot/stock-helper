@@ -557,6 +557,7 @@ async function pageHome(tok){
     <div class="card"><h2>🏆 台股今日排行</h2>
       <div class="seg" id="rkseg"><button class="on" data-k="up">漲最多</button><button data-k="down">跌最多</button><button data-k="vol">成交最多</button></div>
       <div class="list" id="rank" style="margin-top:.4rem"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+    <a class="card" href="learn/" style="display:flex;align-items:center;gap:.7rem;text-decoration:none;color:inherit"><span style="font-size:1.6rem">📚</span><span style="flex:1"><b>看不懂？到股票學堂</b><br><span class="sub small">一天一小課，從零學會看股票</span></span><span class="sub">›</span></a>
     <p class="disclaimer"><span id="upd"></span>資料來源：Yahoo Finance、臺灣證券交易所、櫃買中心、FinMind。每日收盤後更新，非即時報價。<br>所有分析與預測僅供參考，不構成投資建議。</p>`;
   local('status.json', 30).then(st => { if (st && alive(tok)) $('#upd').innerHTML = `資料更新：${esc(st.generated)}（台股 ${esc((st.tw_date || '').slice(5))}、美股 ${esc((st.us_date || '').slice(5))}）<br>`; });
   loadDiv(tok);
@@ -1287,6 +1288,8 @@ function pageSettings(){
     <div class="card"><h2>💰 券商手續費折扣（台股）</h2>
       <div class="field"><select id="disc">${[[1, '無折扣（0.1425%）'], [0.6, '6 折'], [0.5, '5 折'], [0.38, '3.8 折'], [0.28, '2.8 折'], [0.2, '2 折']].map(([v, t]) => `<option value="${v}" ${+st.disc === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="sub small">用來估算持股損益和模擬買賣的手續費（最低 20 元）。不知道的話問開戶的券商，或維持「無折扣」。</div></div>
+    <div class="card"><h2>📚 股票學堂</h2><p style="margin:.2rem 0 .6rem">看不懂這些數字？從零開始，一天一小課學會看股票。</p>
+      <a class="btn ghost block" href="learn/" style="display:block;text-align:center;text-decoration:none">開啟股票學堂</a></div>
     <div class="card"><h2>📲 加到手機主畫面</h2>
       <ul class="plain"><li><b>iPhone</b>：用 Safari 打開這個網址 → 按下方「分享」按鈕 <b>⬆️</b> → 選「<b>加入主畫面</b>」</li>
       <li><b>Android</b>：用 Chrome 打開 → 按右上角 <b>⋮</b> → 選「<b>加到主畫面</b>」或「<b>安裝應用程式</b>」</li></ul></div>

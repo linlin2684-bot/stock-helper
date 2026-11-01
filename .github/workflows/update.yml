@@ -53,6 +53,7 @@ jobs:
       - name: 放入 App 檔案
         run: |
           cp index.html sw.js manifest.webmanifest icon-*.png site/
+          cp -r learn site/
           V="${GITHUB_SHA::7}"
           sed -i "s/__APP_VERSION__/$V/" site/index.html
           echo "{\"v\":\"$V\"}" > site/version.json
