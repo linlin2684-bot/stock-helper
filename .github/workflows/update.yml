@@ -6,6 +6,8 @@ on:
     - cron: '40 21 * * 1-5'   # 台灣時間 週二～六 05:40（美股收盤後）
   push:
     branches: [main]
+    paths-ignore:
+      - 'learn/videos.json'   # 每日影片推薦只改這個檔，App 直接從 GitHub 讀，不用重新發布
   workflow_dispatch:
 
 permissions:

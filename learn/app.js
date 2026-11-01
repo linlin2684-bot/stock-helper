@@ -16,7 +16,7 @@ const pickOne = a => a[Math.floor(Math.random() * a.length)];
 
 /* ---------------- 儲存（存在這支手機） ---------------- */
 const KEY = 'stock-learn-v1';
-const DEF = () => ({ done: {}, days: {}, xp: 0, wrong: {}, tm: [], plan: {}, prac: { n: 0, ok: 0 }, settings: { font: 1 }, seen: {} });
+const DEF = () => ({ done: {}, days: {}, xp: 0, wrong: {}, tm: [], plan: {}, prac: { n: 0, ok: 0 }, settings: { font: 1 }, seen: {}, vs: {} });
 let S;
 try { S = Object.assign(DEF(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) { S = DEF(); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) {} };
@@ -87,7 +87,7 @@ function route(){
   if (h.startsWith('l-')) return openLesson(h.slice(2));
   window.scrollTo(0, 0);
   if (h.startsWith('x-')) return pageExplain(decodeURIComponent(h.slice(2)), tok);
-  ({ home: pageHome, practice: pagePractice, sim: pageSim, dict: pageDict, settings: pageSettings, review: pageReview }[h] || pageHome)(tok);
+  ({ home: pageHome, practice: pagePractice, sim: pageSim, dict: pageDict, settings: pageSettings, review: pageReview, videos: pageVideos }[h] || pageHome)(tok);
 }
 window.addEventListener('hashchange', route);
 
@@ -112,6 +112,7 @@ function pageHome(){
     ${nl ? `<a class="next" href="#l-${nl.id}"><div class="k">${todayDone ? '想多學一點？' : '今天的課'}・${esc(nl.unit.title.replace(/\s+/g, ' '))}</div>
       <div class="t">第 ${nl.no} 課　${esc(nl.title)}</div><span class="go">開始上課（約 ${nl.min} 分鐘）›</span></a>`
       : `<div class="card center"><div class="big">🎓</div><b>全部 ${LESSONS.length} 課都上完了！</b><p class="sub">可以到練習、模擬繼續加強，或重上任何一課。</p></div>`}
+    <div id="vidcard"></div>
     ${wrongN ? `<a class="card row" href="#review" style="text-decoration:none;color:inherit"><span style="font-size:1.6rem">📝</span><div class="grow"><b>複習答錯的題目</b><div class="sub">還有 ${wrongN} 題，答對就會從清單移除</div></div><span class="sub">›</span></a>` : ''}
     <div class="card"><div class="row" style="margin-bottom:.4rem"><b class="grow">全部進度</b><span class="sub">${doneN} / ${LESSONS.length} 課</span></div>
       <div class="bar"><b style="width:${doneN / LESSONS.length * 100}%"></b></div></div>
@@ -125,6 +126,7 @@ function pageHome(){
         ${dd ? `<span class="stars">${'★'.repeat(s)}${'☆'.repeat(3 - s)}</span>` : ''}</a>`; }).join('')}</div>`;
     }).join('')}
     <p class="disclaimer">學習進度存在這支手機。內容僅供學習，不構成投資建議。<br><a href="../">開啟股票小幫手 ›</a></p>`;
+  mountTodayVideos($('#vidcard'));
   const w = $('#welok'); if (w) w.onclick = () => { S.seen.welcome = 1; save(); pageHome(); };
 }
 
@@ -187,7 +189,8 @@ function lessonStep(){
       <p>答對 <b>${L.ok}</b> / ${nq} 題　<span style="color:var(--gold);font-weight:700">+${xp} 經驗值</span></p>
       <p class="sub">🔥 連續學習 ${streak()} 天</p>
       ${L.ok < nq ? '<p class="sub">答錯的題目已放進「複習答錯的題目」，之後再挑戰一次。</p>' : ''}</div>
-      ${nl ? `<div class="card"><div class="sub small">下一課</div><b>第 ${nl.no} 課　${esc(nl.title)}</b></div>` : ''}`;
+      ${nl ? `<div class="card"><div class="sub small">下一課</div><b>第 ${nl.no} 課　${esc(nl.title)}</b></div>` : ''}<div id="lvid"></div>`;
+    mountLessonVideo($('#lvid'), l.id);
     foot.innerHTML = `<button class="btn gray" id="lh">回首頁</button>${nl ? '<button class="btn" id="lnext">下一課 ›</button>' : ''}`;
     $('#lh').onclick = () => { L = null; location.hash = '#home'; };
     if (nl) $('#lnext').onclick = () => { L = null; location.hash = '#l-' + nl.id; };
