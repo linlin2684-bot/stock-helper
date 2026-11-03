@@ -47,6 +47,7 @@ const LBYID = Object.fromEntries(LESSONS.map(l => [l.id, l]));
 const GMAP = Object.fromEntries(GLOSSARY.map(g => [g[0], g]));
 const TERM_LESSON = {};
 LESSONS.forEach(l => l.cards.forEach(c => { for (const m of c.matchAll(/\[\[(.+?)\]\]/g)) { const t = m[1].split('|')[0]; if (!TERM_LESSON[t]) TERM_LESSON[t] = l.id; } }));
+GLOSSARY.forEach(([t]) => { if (!TERM_LESSON[t] && t.length >= 2){ const l = LESSONS.find(l => l.cards.some(c => c.replace(/<[^>]+>/g, '').includes(t))); if (l) TERM_LESSON[t] = l.id; } });
 const nextLesson = () => LESSONS.find(l => !S.done[l.id]);
 const stars = d => !d ? 0 : d.best >= d.of ? 3 : d.best >= Math.ceil(d.of * 0.6) ? 2 : 1;
 const lessonLink = id => LBYID[id] ? `<a href="#l-${id}">第 ${LBYID[id].no} 課〈${esc(LBYID[id].title)}〉</a>` : '';
@@ -210,21 +211,9 @@ function lessonStep(){
 document.addEventListener('click', e => {
   const t = e.target.closest('.term[data-t]'); if (t) { e.preventDefault(); openTerm(t.dataset.t); }
 });
-function openTerm(name){
-  const g = GMAP[name]; closeSheet();
-  const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.onclick = closeSheet;
-  const sh = document.createElement('div'); sh.className = 'sheet';
-  const lid = TERM_LESSON[name];
-  sh.innerHTML = `<div class="row"><h3 class="grow">${esc(name)}</h3>${g ? `<span class="tag">${esc(g[1])}</span>` : ''}</div>
-    <p style="margin:.4rem 0 .8rem">${g ? esc(g[2]) : '（字典裡還沒有這個詞）'}</p>
-    ${lid && !(L && L.l.id === lid) ? `<p class="sub small">在 ${lessonLink(lid)} 有教</p>` : ''}
-    <div class="btns"><button class="btn ghost" id="shsp">🔊 唸給我聽</button><button class="btn" id="shok">知道了</button></div>`;
-  document.body.append(bg, sh);
-  $('#shok').onclick = closeSheet;
-  $('#shsp').onclick = () => speak(name + '。' + (g ? g[2] : ''));
-  sh.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { L = null; }));
-}
-function closeSheet(){ $$('.sheet,.sheet-bg').forEach(x => x.remove()); }
+function openTerm(name){ if (window.TermUI) TermUI.open(name); }
+window.TERM_LINK = c => TERM_LESSON[c] ? `在 ${lessonLink(TERM_LESSON[c])} 有教` : '';
+function closeSheet(){ $$('.sheet,.sheet-bg').forEach(x => x.remove()); if (window.TermUI) TermUI.close(); }
 
 /* ---------------- 語音朗讀 ---------------- */
 let speaking = false;

@@ -90,7 +90,7 @@ function pageCards(){
     const t = queue[i], g = GMAP[t], lid = TERM_LESSON[t];
     app.innerHTML = `<div class="row" style="margin-bottom:.6rem"><div class="bar grow"><b style="width:${i / queue.length * 100}%"></b></div><span class="sub small">${i + 1}/${queue.length}</span></div>
       <div class="card center" style="min-height:14rem;display:flex;flex-direction:column;justify-content:center"><span class="tag" style="align-self:center">${esc(g[1])}</span>
-        <div style="font-size:1.8rem;font-weight:800;margin:.6rem 0">${esc(t)}</div><div id="fb" class="hidden" style="text-align:left">${esc(g[2])}<div class="sub small" style="margin-top:.4rem">出自 ${lessonLink(lid)}</div></div>
+        <div style="font-size:1.8rem;font-weight:800;margin:.6rem 0">${esc(t)}</div><div id="fb" class="hidden" style="text-align:left">${esc(g[2])}${g[3] ? `<div class="tip small" style="margin:.5rem 0 0"><b>例如：</b>${esc(g[3])}</div>` : ''}<div class="sub small" style="margin-top:.4rem">出自 ${lessonLink(lid)}</div></div>
         <div id="hint" class="sub">先在心裡說說看它是什麼意思</div></div>
       <button class="btn block" id="flip">翻面看答案</button>
       <div class="btns hidden" id="judge"><button class="btn gray" id="no">😅 不熟</button><button class="btn" id="yes">🙂 記得</button></div>`;
